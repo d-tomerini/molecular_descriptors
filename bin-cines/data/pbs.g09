@@ -1,0 +1,46 @@
+#----------------------------------------------
+#PBS -S /bin/bash 
+#PBS -l select=1:ncpus=8
+#PBS -l walltime=24:00:00 
+#PBS -N x-yyy
+#PBS -M  luciano.carta@u-picardie.fr 
+#PBS -mb -me
+#PBS -j oe
+#----------------------------------------------
+
+   module load gaussian/09_C01 
+#
+   export R_EXPER="$PBS_O_WORKDIR"
+   export R_SET="xxx"
+
+#
+. ${GAUSS_USER}/utils_gaussian09.sh 
+#
+#  -------------------------------------------------------------------
+#- Repertoire d'execution - obligatoirement sur la zone /scratch/$USER 
+#  -------------------------------------------------------------------
+#
+   TMPDIR="$PBS_O_WORKDIR"
+#
+   R_TMP=$TMPDIR
+#
+   cd $R_TMP
+   pwd 
+#
+# -------------------------------------------------------- 
+# -copie du fichier d'entree du repertoire de lancement 
+#  dans  le repertoire temporaire  de travail 
+# --------------------------------------------------------
+#
+ls -ld /etc/bash.bashrc.local
+
+module list
+
+gaussian_offlimit&
+
+export offlimit_pid=$!
+
+. ${GAUSSIAN}/bsd/g09.profile
+
+${exec}  < ${R_SET}.com > ${R_SET}.log 
+

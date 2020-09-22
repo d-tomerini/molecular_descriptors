@@ -1,0 +1,110 @@
+#----------------------------------------------
+#PBS -S /bin/bash 
+#PBS -l select=1:ncpus=8
+#PBS -l walltime=24:00:00 
+#PBS -N x-yyy
+#PBS -M  daniele.tomerini@u-picardie.fr 
+#PBS -mb -me
+#PBS -j oe
+#----------------------------------------------
+
+   module load gaussian/09_C01 
+#    ----------------------------------------------------------------------------------
+#  - En fin de run voulez-vous recopier dans le repertoire de soumission les .rwf et .chk  ?
+#  - Si oui, donnez une valeur superieure a 0
+#  - -------------------------
+#  - Attention a la volumetrie
+#  - Remarque : si le même repertoire temporaire est utilise, et que le job n'est pas fini, les rwf et chk restent presents
+#  - donc inutile de les copier dans le repertoire de soumission
+#  - -------------------------
+     export RECOPIE_RWF=0
+     export RECOPIE_CHK=1
+#    ----------------------------------------------------------------------------------
+#    ----------------------------------------------------------------------------------
+#  - Est-ce un redemarrage ?   
+#  - Faut-il recopier les fichiers ${R_SET}.rwf ${R_SET}.chk dans la directory de travail  ? (oui=1 non=0)  
+#    ----------------------------------------------------------------------------------
+   export RESTART=1
+
+#  -----------------------------------------------------------------------
+#- Repertoire de lancement du script pbs - du fichier d'entree R_SET.com
+#  -----------------------------------------------------------------------
+#
+    export R_EXPER="$PBS_O_WORKDIR"
+
+    export R_SET="xxx"
+
+#
+#
+. ${GAUSS_USER}/utils_gaussian09.sh 
+#
+#  -------------------------------------------------------------------
+#- Repertoire d'execution - obligatoirement sur la zone /scratch/$USER 
+#  -------------------------------------------------------------------
+#
+    TMPDIR="/scratch/$USER/Gaussians/${R_SET}.dir09"
+#
+        if [ ! -d $TMPDIR ]
+        then
+        mkdir -p $TMPDIR
+        lfs setstripe $TMPDIR -c 20
+        fi
+   R_TMP=$TMPDIR
+#
+   cd $R_TMP
+   pwd 
+#
+# -------------------------------------------------------- 
+# -copie du fichier d'entree du repertoire de lancement 
+#  dans  le repertoire temporaire  de travail 
+# --------------------------------------------------------
+#
+    rapatrie ${R_SET}.com ${R_EXPER}
+
+    if [ $RESTART ]
+    then
+     if [ -f ${R_SET}.rwf ] 
+     then
+     rapatrie ${R_SET}.rwf ${R_EXPER}
+     fi
+     if [ -f ${R_SET}.chk ] 
+       then
+       rapatrie ${R_SET}.chk ${R_EXPER}
+     fi
+    fi
+
+ls -la
+##################################################################
+# Ne rien changer au dela cette ligne 
+##################################################################
+# -----------------------------------------
+# Initialisation environnement d'execution
+# -----------------------------------------
+ls -ld /etc/bash.bashrc.local
+
+module list
+
+gaussian_offlimit&
+
+export offlimit_pid=$!
+
+. ${GAUSSIAN}/bsd/g09.profile
+
+#
+echo " ---------- g09root est postionne a ------------ " $g09root
+#ls $g09root
+
+ 
+# -------------------
+# Lancement du calcul
+# -------------------
+echo $LD_LIBRARY_PATH
+echo "OMP_NUM_THREADS $OMP_NUM_THREADS"
+#
+${exec}  < ${R_SET}.com > ${R_SET}.log 
+
+# -------------------
+# Lancement epilogue 
+# -------------------
+echo " lancement de l epilogue depuis PBS"
+epilogue

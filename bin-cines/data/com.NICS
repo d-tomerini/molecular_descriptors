@@ -1,0 +1,12 @@
+%chk=xxx.chk
+%Mem=9600Mb
+%NProcShared=8
+#P B3LYP/6-31+G(d,p)
+    NMR Int=(Grid=UltraFine)
+    pop=hirshfeld
+    gfinput iop(6/7=3) pop=full NoSym
+
+xxx, NICS
+
+0 1
+

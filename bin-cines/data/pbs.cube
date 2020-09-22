@@ -1,0 +1,20 @@
+#!/usr/bin/bash
+
+
+export file="xxx"
+export chk=$file.chk
+export fchk=$file.fchk
+
+echo Dealing with $file file ...
+mkdir -p $file.cubes
+
+formchk $chk $file.cubes/$fchk
+cp $file.log $file.cubes/.
+
+cubegen 0 density=scf  $file.cubes/$fchk $file.cubes/$file-den.cube 0 h
+cubegen 0 MO=HOMO   $file.cubes/$fchk $file.cubes/$file-HOMO.cube 0 h
+cubegen 0 MO=LUMO  $file.cubes/$fchk $file.cubes/$file-LUMO.cube 0 h
+cubegen 0 spin=scf  $file.cubes/$fchk $file.cubes/$file-spinden.cube 0 h
+cubegen 0 potential=scf  $file.cubes/$fchk $file.cubes/$file-pot.cube 0 h
+
+echo Done creating the files $file

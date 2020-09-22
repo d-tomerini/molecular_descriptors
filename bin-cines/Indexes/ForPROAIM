@@ -1,0 +1,224 @@
+#!/usr/bin/perl 
+
+@allwfn =  @ARGV;
+print "Files to print: @allwfn \nStarting...\n";
+foreach $wfn (@allwfn) {
+    $wfn =~ s/.com/.wfn/g;
+    $wfn =~ s/.log/.wfn/g;
+     
+    open WFN, $wfn or die "Cannot find the file '$wfn'";
+    print "processing $wfn...\n";
+    $seed= substr $wfn, 0, -4;
+    system("sed 's/TOTAL ENERGY/THE  HF ENERGY/' $seed.wfn > picc");
+    rename picc, "$seed.wfn";
+
+    @atoms=();
+    @coord=();
+
+    while (<WFN>) {
+        if (/GAUSSIAN/) {
+            $i=0;
+            $_=<WFN>;
+            do {
+                $atoms[$i] = substr $_, 0, 8;
+                @i= split;
+                @{$coord[$i]}= @i[4..6];
+                $i++;
+                $_=<WFN>;
+            } while !(/CENTRE ASSIGNMENTS/);
+        }
+    }
+    close WFN;
+
+    if (-e "$seed.log") {
+        open LOG, "$seed.log" ;
+        while (<LOG>) {
+            if (/alpha electrons/) {
+                @i= split;
+                $alpha= $i[0];
+                $beta= $i[-3];
+                last;
+            }
+        }
+        close LOG;
+
+        open FOREXT, ">forext";
+        print FOREXT "CriticalPoints
+1
+6
+2
+3
+0
+0
+0
+9
+";
+        close FOREXT;
+        system("a.ext $seed < forext > $seed-1.out");
+
+        @nbond=();
+        @nring = ();
+        @alist =();
+        @aring = ();
+        @ringenv = ();
+        @splitCP=();
+        @rings=();
+        @$bonds=();
+        $r=0;
+        $b=0;
+        @cp=();
+
+        open CP, "$seed.crt";
+        while (<CP>) {
+            if (/CRITICAL POINTS/) {
+                $i=0;
+                while (<CP>) {
+                    $cp[$i] = $_;
+                    @{$splitCP[$i]} = split ;  
+                    $i++;
+                }   
+            }
+        }
+        close CP;
+
+        for $j (0..$#cp) {
+            if ($cp[$j] =~ /(3, 1)/){
+                $rings[$b] = $j;
+                $b++;
+            }
+            if ($cp[$j] =~ /(3,-1)/) {
+                $bonds[$r] = $j;
+                $r++;
+            }
+        }
+
+        print "Found $r bonds and $b rings";
+
+        open FOREXT, ">forext";
+        print FOREXT "CriticalPoints \n1";
+        foreach $i (@bonds) {
+            print FOREXT "
+1
+$splitCP[$i]->[5] $splitCP[$i]->[7]
+1
+1";
+        }
+        
+        print FOREXT "\n9";
+        close FOREXT;
+
+        system("a.ext $seed < forext > $seed-2.out");
+        open MEO, ">picc";
+        open CP, "$seed.crt";
+        $i=0;
+        while (<CP>) {
+            if (/BOND PATH LINKED/) {
+                $cp[$bonds[$i]] = $_;
+                do { $_ = <CP>; } while (not /BOND PATH LINKED/);
+                $cp[$bonds[$i]] = "$cp[$bonds[$i]] '$_'\n";   
+                $i++;   
+            }
+        }
+
+        for $i (0..$#atoms) {
+            $alist[$i] ="";
+            $aring[$i] = "";
+            $ringenv[$i] = "";
+            $nring[$i] = 0;
+            foreach $k (@rings) {
+                $rdist = distance(@{$coord[$i]}[0..2],@{$splitCP[$k]}[1..3]);
+                if ($rdist < 3.5) {
+                    $bnum=0;
+                    $u[0] = 1000;
+                    $u[1] = 1000;
+                    $v[0] = 1000;
+                    $v[1] = 1000;
+                    foreach $j (@bonds) {
+                        if ($cp[$j] =~ /$atoms[$i]/) {
+                            $bnum++;
+                            $jj = distance(@{$splitCP[$j]}[1..3], @{$splitCP[$k]}[1..3]) ;
+                            if ($jj < $u[0]) {
+                                $u[0] = $jj;
+                                $v[0] = $bnum;
+                            } else { 
+                                if ($jj < $u[1]) {
+                                    $u[1] = $jj; 
+                                    $v[1] = $bnum;
+                                }
+                            }    
+                        }
+                    }
+                    if ($bnum>1) {
+                        $nring[$i]++;
+                        $aring[$i] = "$aring[$i] $splitCP[$k]->[1] $splitCP[$k]->[2] $splitCP[$k]->[3]\n";
+                        $ringenv[$i] = "$ringenv[$i] $v[0] $v[1] 0 0 \n";
+                    }    
+                }
+            }
+            print MEO "$i:\n";
+            foreach $j (@bonds) {
+                if ($cp[$j] =~ /$atoms[$i]/) {
+                    $alist[$i] = "$alist[$i] $splitCP[$j]->[1] $splitCP[$j]->[2] $splitCP[$j]->[3]\n";
+                    print MEO "$cp[$j]";
+                    $nbond[$i]++;
+                } 
+            }
+        }
+
+        print "Use correttalocsp!\n";
+        $alpha++;
+
+        for $i (0..$#atoms) {
+            open PINP, ">$seed-$i.inp";
+            $z = $seed-$i;
+            $z = substr($z, -12);
+            print PINP "$seed\n";
+            print PINP 
+"$atoms[$i] 
+PROAIM
+$nbond[$i] $nring[$i] 0
+$alist[$i]$aring[$i]$ringenv[$i] 64 48 200
+OPTIONS
+INTEGER 2
+ 6 1     calculate AOM 
+ 9 $alpha
+REAL 0 
+";
+            close PINP;
+            $z = substr($seed, -10);
+            open PBS, ">pbs.SF.$seed-$i";
+            print PBS 
+
+"#----------------------------------------------
+#PBS -S /bin/bash
+#PBS -l select=1:ncpus=8
+#PBS -l walltime=00:20:00
+#PBS -N $z
+#PBS -M  daniele.tomerini\@u-picardie.fr
+#PBS -mb -me
+#PBS -j oe
+#----------------------------------------------
+
+cd \$PBS_O_WORKDIR
+
+/home/bordeaux/bin/Gatti/a.correttalocsp  $seed-$i  $seed $seed-$i $seed-$i > $seed-$i.int 
+/home/bordeaux/bin/Gatti/a.delindsp $seed-$i $seed-$i
+";
+
+            close PBS;
+            system("qsub pbs.SF.$seed-$i") ;
+        }
+    }  
+}
+
+
+sub distance() {
+  @i[0..2] = @_[0..2];
+  @j[0..2] = @_[3..5];
+  my $b= 0.0;
+
+  for my $i (0..2) {
+    $b += ($i[$i]-$j[$i])*($i[$i]-$j[$i]);
+  }
+  $b = sqrt($b);
+}
