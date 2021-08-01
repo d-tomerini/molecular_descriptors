@@ -1,5 +1,11 @@
 #!/usr/bin/perl
 
+# This script creates a script readable by jmol, to overlay the partial charges of the atoms
+
+# Input: One or more gaussian log files, and it expects a similarly named spinden file
+# Output: a jmol script to load and overlay the charges, named file.sd.script
+# Required files: a preprocessed .spinden file with the same name as the log file
+
 foreach $x (@ARGV){
     $x =~ s/.log//g;
     $ats = "";
