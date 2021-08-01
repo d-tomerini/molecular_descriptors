@@ -1,4 +1,13 @@
 #!/usr/bin/perl -w
+
+# simple script to submit a batch of jobs on the cines supercomputer
+# this was meant to send multiple variations of a molecule structure, and organize files accordingly
+# 
+# sleep required, to avoid being throttled by the scheduler
+
+# master pbs file to ensure changeable properties on a single file
+# usage: given a series of molecules named molname+variations.com: topbs molname*.com
+
 use Time::HiRes qw(usleep nanosleep);
 
 $pbs = "$ENV{'HOME'}/bin/data/pbs.g09";
